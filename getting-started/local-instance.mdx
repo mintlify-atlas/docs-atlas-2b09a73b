@@ -1,0 +1,123 @@
+---
+title: "Run a ClusterFuzz Local Instance for Development Testing"
+description: "Start a local ClusterFuzz server and bot for testing core functionality, with guidance on devcontainers, ports, logs, and local storage."
+---
+
+You can run a local instance of ClusterFuzz to test core functionality without a Google Cloud account. The local instance simulates the full server and bot workflow on your machine, making it suitable for development and integration testing. Note that some features — including crash statistics and fuzzer statistics — are not available locally because they rely on Google Cloud emulators that are not included in the local setup.
+
+## Development containers (recommended)
+
+Devcontainers provide a fully configured, reproducible environment by containerizing the entire ClusterFuzz setup. This approach avoids environment-specific issues and removes the need to install dependencies manually.
+
+### Prerequisites
+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) or a compatible Docker engine
+- [Visual Studio Code](https://code.visualstudio.com/)
+- [Dev Containers extension for VS Code](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
+
+### Getting started with devcontainers
+
+<Steps>
+  <Step title="Open the repository in VS Code">
+    Open the ClusterFuzz repository folder in Visual Studio Code.
+  </Step>
+  <Step title="Reopen in container">
+    VS Code should prompt you to **Reopen in Container**. If it does not, press `F1` (or `Ctrl+Shift+P` / `Cmd+Shift+P`) and select **Dev Containers: Reopen in Container**.
+  </Step>
+  <Step title="Wait for the build">
+    The first time you open the container, VS Code builds the image and runs `local/install_deps.bash`. This may take several minutes. Once complete, you will have a fully configured environment with Python 3.11, Java 21, and all required dependencies.
+  </Step>
+  <Step title="Start the server">
+    Since all dependencies are already installed inside the container, skip the install step for faster startup:
+
+    ```bash
+    python butler.py run_server --skip-install-deps
+    ```
+  </Step>
+</Steps>
+
+## Running a local server
+
+<Steps>
+  <Step title="Bootstrap the server (first run only)">
+    The first time you start the server, or when you want to reset all data, use the `--bootstrap` flag:
+
+    ```bash
+    python butler.py run_server --bootstrap
+    ```
+
+    This initializes the local datastore and creates the default configuration.
+  </Step>
+  <Step title="Start the server (subsequent runs)">
+    On subsequent runs, omit the `--bootstrap` flag to preserve your existing data:
+
+    ```bash
+    python butler.py run_server
+    ```
+  </Step>
+  <Step title="Open the web interface">
+    The server takes a few seconds to start. Once you see a line like:
+
+    ```
+    [INFO] Listening at: http://0.0.0.0:9000
+    ```
+
+    Open [http://localhost:9000](http://localhost:9000) in your browser to access the ClusterFuzz web UI.
+  </Step>
+</Steps>
+
+<Warning>
+  The local instance uses multiple ports. Port 9000 serves the web interface, and port 9008 is used for file uploads. If either port is unavailable — or if you have port forwarding or firewall rules that block access — the local instance may not function correctly.
+</Warning>
+
+## Running a local bot
+
+With the server running, start a ClusterFuzz bot in a separate terminal:
+
+```bash
+python butler.py run_bot --name my-bot /path/to/my-bot
+```
+
+Replace `my-bot` with any name and `/path/to/my-bot` with a directory where the bot should store its data. The command creates a copy of the ClusterFuzz source under `/path/to/my-bot/clusterfuzz` and stores bot artifacts — logs, fuzzers, and corpora — in the `bot` subdirectory.
+
+<Tip>
+  If you plan to fuzz native GUI applications, run the bot inside a virtual framebuffer such as [Xvfb](https://en.wikipedia.org/wiki/Xvfb) to prevent GUI dialogs from appearing during fuzzing.
+</Tip>
+
+### Viewing bot logs
+
+To monitor the bot's activity in real time:
+
+```bash
+tail -f /path/to/my-bot/clusterfuzz/bot/logs/bot.log
+```
+
+<Note>
+  Until you configure fuzzing jobs, you will see a harmless error in the logs: `Failed to get any fuzzing tasks`. This is expected and does not indicate a problem with the bot setup.
+</Note>
+
+## Local Google Cloud Storage
+
+The local instance simulates [Google Cloud Storage](https://cloud.google.com/storage/) using your local filesystem. By default, this is stored at `local/storage/local_gcs` within your ClusterFuzz checkout.
+
+Objects are stored at `<bucket>/objects/<object path>` and metadata at `<bucket>/metadata/<object path>`.
+
+To use a different storage location, pass matching flags to both commands:
+
+```bash
+python butler.py run_server --storage-path /custom/storage/path
+python butler.py run_bot --name my-bot --server-storage-path /custom/storage/path /path/to/my-bot
+```
+
+## Next steps
+
+Once your local instance is running, you can configure fuzzing jobs and upload fuzz targets to begin testing.
+
+<CardGroup cols={2}>
+  <Card title="Setting up fuzzing" icon="bug" href="/fuzzing/overview">
+    Configure coverage-guided and blackbox fuzzing jobs for your targets.
+  </Card>
+  <Card title="Production deployment" icon="server" href="/production-setup/overview">
+    Deploy ClusterFuzz on Google Cloud for a full-scale production instance.
+  </Card>
+</CardGroup>

@@ -1,0 +1,115 @@
+---
+title: "Setting Up a Continuous Build Pipeline for ClusterFuzz"
+description: "Configure your CI system to produce sanitizer-instrumented build archives in GCS so ClusterFuzz can detect regressions, verify fixes, and fuzz the latest code."
+---
+
+ClusterFuzz is most effective when it fuzzes the latest version of your targets continuously. A build pipeline that produces new archives on every commit allows ClusterFuzz to pinpoint the exact revision where a regression was introduced and to automatically verify when a bug is fixed. Without a pipeline, ClusterFuzz can only fuzz a single static build and cannot track change history.
+
+## Why a continuous build pipeline is required
+
+Fuzzing works best as an ongoing process, not a one-time scan. As your project evolves, new code paths are introduced and old bugs are fixed. ClusterFuzz needs a stream of versioned builds to:
+
+- Identify the revision range where a regression was introduced
+- Detect when a fix lands and close the associated bug
+- Always fuzz the most recent code rather than a stale snapshot
+
+ClusterFuzz does not provide build infrastructure. If you have an existing CI system, it can almost certainly be adapted to supply builds.
+
+## Sanitizer requirements
+
+Your builds must be instrumented with a [sanitizer](https://clang.llvm.org/docs/AddressSanitizer.html). It is recommended to use a separate build and job definition for each sanitizer to avoid performance issues from combining them. Supported sanitizers include AddressSanitizer, MemorySanitizer, UndefinedBehaviorSanitizer, ThreadSanitizer, and LeakSanitizer.
+
+## Providing builds to ClusterFuzz
+
+Build archives must be uploaded to a [GCS bucket](https://cloud.google.com/storage/docs/creating-buckets). You can upload with the [`gsutil` tool](https://cloud.google.com/storage/docs/gsutil) or using [signed URLs](https://cloud.google.com/storage/docs/access-control/signed-urls).
+
+### Archive naming convention
+
+The archive filename must follow the pattern `any-name-([0-9]+).zip`, where the number in parentheses is a **revision number** that increases monotonically with each build. Accepted revision formats include:
+
+- SVN commit position
+- Timestamp (for example, `YYYYMMDDHHMM`)
+- Any other build number that strictly increases
+
+In addition to `.zip`, all standard [tar compressed extensions](https://en.wikipedia.org/wiki/Tar_(computing)#Suffixes_for_compressed_files) are supported.
+
+### Configuring the GCS path
+
+When creating a fuzzing job, set the `RELEASE_BUILD_BUCKET_PATH` environment variable in the job definition to point to your build archives:
+
+```
+RELEASE_BUILD_BUCKET_PATH = gs://bucket-name/subdirectory/any-name-([0-9]+).zip
+```
+
+The parentheses around `[0-9]+` are required — ClusterFuzz uses this capture group to extract the revision number and determine which build is newest.
+
+## Tracking dependency revisions
+
+ClusterFuzz can detect regression and fix ranges not just in your target project, but in its dependencies as well. To enable this, provide a `.srcmap.json` file alongside each build archive. The srcmap filename must match the archive name with `.srcmap.json` in place of `.zip` or `.tar*`:
+
+```
+any-name-([0-9]+).srcmap.json
+```
+
+Point the `REVISION_VARS_URL` environment variable in the job definition to the srcmap files:
+
+```
+REVISION_VARS_URL = gs://bucket-name/subdirectory/any-name-([0-9]+).srcmap.json
+```
+
+### Srcmap format
+
+```json
+{
+  "/path/to/library": {
+    "type": "type_of_version_control_system",
+    "url": "repository_url",
+    "rev": "revision_identifier"
+  }
+}
+```
+
+### Example: libpng srcmap
+
+```json
+{
+  "/src/libpng": {
+    "type": "git",
+    "url": "https://github.com/glennrp/libpng.git",
+    "rev": "eddf9023206dc40974c26f589ee2ad63a4227a1e"
+  },
+  "/src/zlib": {
+    "type": "git",
+    "url": "https://github.com/madler/zlib.git",
+    "rev": "cacf7f1d4e3d44d871b605da3b647f07d718623f"
+  },
+  "/src/libfuzzer": {
+    "type": "svn",
+    "url": "https://llvm.org/svn/llvm-project/compiler-rt/trunk/lib/fuzzer",
+    "rev": "350185"
+  }
+}
+```
+
+## Runtime dependencies and seed corpora
+
+If your target requires additional files at runtime — such as a seed corpus or a dictionary for libFuzzer or AFL — include them in the same directory as the target executable inside the build archive. ClusterFuzz will unpack the archive and expect all dependencies to be present relative to the binary.
+
+## Supported CI systems
+
+Most continuous integration platforms can supply builds to ClusterFuzz. Common options include:
+
+<CardGroup cols={2}>
+  <Card title="Google Cloud Build" icon="cloud" href="https://cloud.google.com/cloud-build/docs/">
+    Native GCP integration for building and uploading archives directly to GCS.
+  </Card>
+  <Card title="Jenkins" icon="gear" href="https://jenkins.io/">
+    Widely used open-source CI with flexible pipeline support for any build system.
+  </Card>
+</CardGroup>
+
+## Next steps
+
+<Card title="Setting up fuzzing jobs" icon="bug" href="/production-setup/fuzzing-jobs">
+  Create a job definition that points to your GCS build archives and enables continuous fuzzing.
+</Card>

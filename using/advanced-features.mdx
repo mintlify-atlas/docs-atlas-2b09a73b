@@ -1,0 +1,134 @@
+---
+title: "ClusterFuzz Advanced Features: Access Control and Coverage"
+description: "Configure role-based access for regular, privileged, and admin users. Set up a coverage builder and provide the GCS coverage info JSON ClusterFuzz expects."
+---
+
+ClusterFuzz ships with two features that require explicit configuration before they are fully operational: a role-based access control system that governs what each user can see and do, and a code coverage integration that lets you surface per-fuzzer and per-project coverage reports inside the ClusterFuzz interface. This page covers both.
+
+## Access control
+
+ClusterFuzz restricts access to sensitive data and administrative actions through three user roles. Administrators manage role assignments on the **Configuration** page.
+
+<Tabs>
+  <Tab title="Regular users">
+    Regular users are typically the developers who triage and fix bugs. They can access most of the web interface, but security-sensitive data is hidden from them.
+
+    **Pages accessible:**
+    - Testcases (security vulnerabilities excluded)
+    - Testcase report (security vulnerabilities excluded)
+    - Crash Statistics (security vulnerabilities excluded)
+    - Crashes by range (security vulnerabilities excluded)
+    - Fuzzer Statistics
+    - Upload Testcase
+    - Fuzzers (view only)
+    - Corpora (view only)
+    - Bots
+
+    **Pages not accessible:**
+    - Jobs page
+    - Configuration page
+  </Tab>
+  <Tab title="Privileged users">
+    Privileged users have unrestricted access to most of ClusterFuzz. They inherit all regular user access and additionally can:
+
+    - View security bugs (reports where Security is marked **YES**)
+    - Upload new fuzzers on the Fuzzers page
+    - Upload new corpora on the Corpora page
+    - Create new jobs on the Jobs page
+
+    Privileged users are defined by administrators on the **Configuration** page, using the **Privileged Users** field (e.g. `user@example.com`) or the **User permissions** section.
+  </Tab>
+  <Tab title="Administrators">
+    Administrators have access to every part of the ClusterFuzz interface. In addition to everything available to privileged users, administrators can:
+
+    - Access the **Configuration** page
+    - Grant and revoke privileged access for other accounts
+    - Configure granular user permissions
+
+    Administrator status is managed via [Google App Engine admin users](https://cloud.google.com/appengine/docs/standard/python/users/adminusers).
+  </Tab>
+</Tabs>
+
+<Warning>
+  By default, only privileged users and administrators can view testcases, crash statistics, and reports flagged with security implications. Assigning broad privileged access means those users will see potentially sensitive vulnerability data.
+</Warning>
+
+## Code coverage
+
+ClusterFuzz can store, display, and act on code coverage information. It does **not** generate coverage reports itself — that step depends on the build system used by your project, which varies across projects. Instead, you configure an external builder or CI job to produce the coverage data and upload it to a location ClusterFuzz can read.
+
+### Setting up a coverage builder
+
+For C and C++ projects, [Clang Source-based Code Coverage](https://clang.llvm.org/docs/SourceBasedCodeCoverage.html) is recommended. A typical builder workflow produces three categories of artifact: per-fuzzer JSON stats files, a project-wide summary JSON, and an HTML report.
+
+<Steps>
+  <Step title="Build with coverage instrumentation">
+    Check out the latest source code and build all fuzzers with coverage instrumentation enabled.
+  </Step>
+  <Step title="Download corpus backups from ClusterFuzz">
+    For each fuzzer, download the latest corpus backup that ClusterFuzz has stored.
+  </Step>
+  <Step title="Run each fuzzer and collect coverage dumps">
+    Unpack the corpus backup, run the fuzzer against it, and collect the resulting `.profraw` files.
+  </Step>
+  <Step title="Generate per-fuzzer stats">
+    For each fuzzer, merge its `.profraw` files with `llvm-profdata merge` to produce a `.profdata` file, then run `llvm-cov export -summary-only` to generate `$fuzzer_name.json`.
+  </Step>
+  <Step title="Generate project-wide stats and HTML report">
+    Merge all individual `.profdata` files into a single file. Use it to produce `summary.json` for the whole project and an HTML report with `llvm-cov show -format=html`.
+  </Step>
+  <Step title="Upload artifacts and the coverage info file">
+    Upload all artifacts to the GCS bucket specified in your project config (`coverage.reports.bucket`), then upload the coverage info JSON file described below.
+  </Step>
+</Steps>
+
+### Coverage info JSON format
+
+After generating artifacts, the builder must upload a JSON file that tells ClusterFuzz where to find them. The file must be named after the project (e.g. `zlib.json`) and placed at:
+
+```bash
+gs://<bucket>/latest_report_info/<project>.json
+```
+
+The file has the following structure:
+
+```json
+{
+    "report_date": "YYYYMMDD",
+    "fuzzer_stats_dir": "gs://path_to_directory_with_per_fuzzer_summary.json_files",
+    "report_summary_path": "gs://path_to_the_project_summary.json_file",
+    "html_report_url": "https://link_to_the_main_page_of_the_report"
+}
+```
+
+<AccordionGroup>
+  <Accordion title="report_date">
+    The date the coverage report was generated, formatted as `YYYYMMDD` (e.g. `20190112`).
+  </Accordion>
+  <Accordion title="fuzzer_stats_dir">
+    A GCS directory path containing one `$fuzzer_name.json` file for each fuzzer in the project. These are the per-fuzzer summary files produced by `llvm-cov export -summary-only`.
+  </Accordion>
+  <Accordion title="report_summary_path">
+    The GCS path to the project-wide `summary.json` file. This file contains aggregate coverage data from all fuzzers.
+  </Accordion>
+  <Accordion title="html_report_url">
+    An HTTPS URL pointing to the `index.html` of the HTML coverage report. ClusterFuzz uses this to link to the human-readable report from the interface.
+  </Accordion>
+</AccordionGroup>
+
+### Example: OSS-Fuzz zlib
+
+The following is a real coverage info file uploaded by the OSS-Fuzz coverage job for the `zlib` project:
+
+```json
+{
+    "report_date": "20190112",
+    "fuzzer_stats_dir": "gs://oss-fuzz-coverage/zlib/fuzzer_stats/20190112",
+    "report_summary_path": "gs://oss-fuzz-coverage/zlib/reports/20190112/linux/summary.json",
+    "html_report_url": "https://storage.googleapis.com/oss-fuzz-coverage/zlib/reports/20190112/linux/index.html"
+}
+```
+
+<Note>
+  The GCS bucket name is determined by the `coverage.reports.bucket` field in your project configuration. Ensure your builder has write access to that bucket before running the coverage job.
+</Note>

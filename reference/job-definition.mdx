@@ -1,0 +1,146 @@
+---
+title: "Job definition: environment variables and examples"
+description: "Reference for all ClusterFuzz job environment variables, including common, LibFuzzer/AFL, and blackbox-specific options, with real production job examples."
+---
+
+Jobs in ClusterFuzz are created and edited on the **Jobs** page. A job definition primarily consists of environment variable assignments that tell ClusterFuzz how to run a target program and where to find its builds. When you apply a job template, the template injects its own variable set into the definition.
+
+<Note>
+  You may not need to use many of these variables. Start with `CUSTOM_BINARY` and either `RELEASE_BUILD_BUCKET_PATH` or a manually uploaded build, then add options as needed.
+</Note>
+
+## Environment variables
+
+### Common variables
+
+<ParamField path="CUSTOM_BINARY" type="boolean" required>
+  Indicates whether a job uses a manually uploaded build. Set to `True` if you upload a build when creating the job. Set to `False` if you use `RELEASE_BUILD_BUCKET_PATH` to specify a build stored in a Google Cloud Storage bucket.
+</ParamField>
+
+<ParamField path="RELEASE_BUILD_BUCKET_PATH" type="string">
+  Path to the build uploaded to a Google Cloud Storage bucket. See the production setup guide for details on specifying a continuous build.
+
+  Example value: `gs://clusterfuzz-builds/zlib/zlib-address-([0-9]+).zip`
+</ParamField>
+
+<ParamField path="ADDITIONAL_ASAN_OPTIONS" type="string">
+  Custom [runtime flags for AddressSanitizer](https://github.com/google/sanitizers/wiki/AddressSanitizerFlags#run-time-flags). Values specified here overwrite the ClusterFuzz defaults. The same pattern applies to other sanitizers via `ADDITIONAL_MSAN_OPTIONS` and `ADDITIONAL_UBSAN_OPTIONS`.
+
+  Example value: `allocator_may_return_null=0`
+</ParamField>
+
+### LibFuzzer and AFL specific
+
+<ParamField path="CORPUS_PRUNE" type="boolean" default="False">
+  Indicates whether corpus pruning should run for this job. It is recommended to set this to `True` for libFuzzer ASan jobs only. Enabling pruning on one job is sufficient — other libFuzzer and AFL jobs share the same corpus when running the same fuzz targets.
+</ParamField>
+
+### Blackbox fuzzing specific
+
+<ParamField path="APP_NAME" type="string" required>
+  The file name of the target application to be tested.
+</ParamField>
+
+<ParamField path="APP_ARGS" type="string">
+  Arguments to pass to the target application. This variable should include both optional and required arguments you want to pass.
+</ParamField>
+
+<ParamField path="REQUIRED_APP_ARGS" type="string">
+  Arguments that must always be passed to the target application. These arguments are preserved during testcase minimization. Arguments listed in `APP_ARGS` but not in `REQUIRED_APP_ARGS` may be removed by ClusterFuzz if they are not needed to reproduce a crash.
+</ParamField>
+
+<ParamField path="TEST_TIMEOUT" type="number">
+  How many seconds a target application can spend processing an individual testcase.
+
+  Example value: `15`
+</ParamField>
+
+## Examples
+
+The following examples come from a production instance of ClusterFuzz.
+
+### LibFuzzer and AFL
+
+<Tabs>
+  <Tab title="libfuzzer_asan_zlib">
+    **Job name:** `libfuzzer_asan_zlib`
+
+    **Platform:** `LINUX`
+
+    **Templates:**
+
+    ```text
+    libfuzzer
+    engine_asan
+    ```
+
+    **Environment string:**
+
+    ```text
+    RELEASE_BUILD_BUCKET_PATH = gs://clusterfuzz-builds/zlib/zlib-address-([0-9]+).zip
+    CUSTOM_BINARY = False
+    CORPUS_PRUNE = True
+    ```
+  </Tab>
+
+  <Tab title="libfuzzer_ubsan_zlib">
+    **Job name:** `libfuzzer_ubsan_zlib`
+
+    **Platform:** `LINUX`
+
+    **Templates:**
+
+    ```text
+    libfuzzer
+    engine_ubsan
+    ```
+
+    **Environment string:**
+
+    ```text
+    RELEASE_BUILD_BUCKET_PATH = gs://clusterfuzz-builds/zlib/zlib-undefined-([0-9]+).zip
+    CUSTOM_BINARY = False
+    ```
+  </Tab>
+
+  <Tab title="afl_asan_zlib">
+    **Job name:** `afl_asan_zlib`
+
+    **Platform:** `LINUX`
+
+    **Templates:**
+
+    ```text
+    afl
+    engine_asan
+    ```
+
+    **Environment string:**
+
+    ```text
+    RELEASE_BUILD_BUCKET_PATH = gs://clusterfuzz-builds-afl/zlib/zlib-address-([0-9]+).zip
+    CUSTOM_BINARY = False
+    ```
+  </Tab>
+</Tabs>
+
+### Blackbox fuzzing
+
+**Job name:** `asan_linux_chrome`
+
+**Platform:** `LINUX`
+
+**Templates:** none
+
+**Environment string:**
+
+```text
+RELEASE_BUILD_BUCKET_PATH = gs://chromium-browser-asan/linux-release/asan-linux-release-([0-9]+).zip
+MIN_REVISION = 441045
+CUSTOM_BINARY = False
+APP_NAME = chrome
+APP_ARGS = --enable-experimental-extension-apis --enable-extension-apps --js-flags="--expose-gc --verify-heap" --no-first-run --use-gl=swiftshader --disable-in-process-stack-traces
+REQUIRED_APP_ARGS =  --no-first-run --use-gl=swiftshader --disable-in-process-stack-traces
+TEST_TIMEOUT = 15
+ADDITIONAL_ASAN_OPTIONS = allocator_may_return_null=0
+```

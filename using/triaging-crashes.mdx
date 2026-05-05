@@ -1,0 +1,67 @@
+---
+title: "Triaging New ClusterFuzz Crashes: Filters and Traces"
+description: "How to filter testcases, read regression ranges, interpret sanitizer stack traces, and use crash statistics to pinpoint the source of a bug."
+---
+
+ClusterFuzz was built to remove as much manual work from fuzzing as possible, and bug triage has historically been one of the most labour-intensive steps. By combining automated crash analysis, regression bisection, and rich statistics, ClusterFuzz dramatically reduces the time needed to determine what broke and when. This page describes the main tools available on the Testcases page and the Crash Statistics page, and recommends workflows for getting from a new crash to an actionable assignment.
+
+## Filtering testcases
+
+ClusterFuzz performs automatic analysis on every testcase it captures. The **Testcases** page exposes this analysis through filters and a search bar so you can narrow down to the crashes most relevant to you.
+
+You can filter by:
+
+- **Crash type** — the category of memory-safety violation or error detected (e.g. heap-buffer-overflow, use-after-free)
+- **Crash state** — a normalised signature derived from the top of the call stack, used to deduplicate similar crashes
+- **Fuzzer name** — the fuzzer that discovered the issue
+- **Job name** — the build configuration against which the crash was found
+- **Reliability** — whether the crash reproduces consistently or only intermittently
+- **Security implications** — whether the issue is classified as a security vulnerability
+
+<Note>
+  By default, only privileged users can see issues with security implications. This lets you grant access to a broad set of developers without leaking potentially sensitive information. See [Access control](/using/advanced-features) for how to configure finer-grained permissions.
+</Note>
+
+## Regression revision range
+
+The regression range is often the single most useful piece of triage information. It identifies the range of commits in which the bug was introduced, letting you search a small set of changes rather than the entire history.
+
+<Tip>
+  The more frequently you archive builds, the narrower the regression range will be. If you archive every revision, ClusterFuzz can identify the exact commit that introduced the bug.
+</Tip>
+
+The regression range is only available for **reliably reproducible** crashes — ClusterFuzz must be able to reproduce the crash consistently before it can bisect across revisions. Once a reliable testcase exists, the bisection runs automatically and the resulting range appears on the testcase details page.
+
+## Reading crash stack traces
+
+When you run targets with [sanitizers](https://github.com/google/sanitizers) such as AddressSanitizer or UndefinedBehaviorSanitizer, the stack trace attached to a report contains rich detail about what went wrong and where. Interpreting this information is more an art than an exact science, but the following approaches are consistently useful.
+
+<Steps>
+  <Step title="Check the regression range first">
+    If a regression range is available, look for changes within that range that touch the same files or functions listed near the top of the stack trace. A direct overlap between modified code and the crash site is a strong signal.
+  </Step>
+
+  <Step title="Identify the owning developer">
+    When there is no regression range, or when the overlap with changed files is not clear, use `git blame` or an equivalent tool on the functions in the stack trace. The author or reviewer of the relevant code is often a good first point of contact.
+  </Step>
+
+  <Step title="Expand the full stack trace">
+    At the top of the testcase report, ClusterFuzz shows the command line and any environment variables that were set when the crash occurred. These may be required to reproduce the issue locally. Click to expand the full trace if it is collapsed.
+  </Step>
+</Steps>
+
+## Crash statistics for non-reproducible crashes
+
+Not every crash has a reliable testcase. For crashes that cannot be reproduced deterministically, the **Crash Statistics** page provides complementary signal.
+
+ClusterFuzz tracks:
+
+- How frequently a crash state has been observed
+- Which platforms the crash appears on
+- When the crash first appeared and how its frequency has changed over time
+
+<Tip>
+  If a crash state appears exclusively on one platform, look for large platform-specific changes made around the time the crash started. If the frequency jumped sharply on a particular day, cross-reference that date with recent commits or deployments.
+</Tip>
+
+For a non-reproducible crash, ClusterFuzz will still file a bug if the crash state is seen very frequently. If a reliably reproducible testcase for the same crash state is later discovered, ClusterFuzz creates a new report and deletes the older unreliable one.

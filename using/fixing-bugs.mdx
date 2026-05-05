@@ -1,0 +1,66 @@
+---
+title: "Reproducing and Fixing Bugs Detected by ClusterFuzz"
+description: "How to use testcase details to reproduce a crash locally, understand ClusterFuzz automatic fix verification, and work with unreliable testcases."
+---
+
+Finding bugs is only valuable when those bugs get fixed. ClusterFuzz makes fixing easier by providing everything you need to reproduce an issue locally and by automatically confirming that your fix is correct once it lands. This page walks through the full workflow from a new crash report to a verified fix.
+
+## Reproducing an issue
+
+The **Overview** section of a testcase report contains direct links to download both the testcase file and the exact build that triggered the crash. Together they give you a reproducible starting point on your local machine.
+
+<Steps>
+  <Step title="Download the testcase and build">
+    Open the testcase details page and use the links in the **Overview** section to download the testcase file and the associated build artifact.
+  </Step>
+  <Step title="Read the command line and environment">
+    At the top of the crash stacktrace (expand it if collapsed), ClusterFuzz displays the exact command line and any environment variables that were set when the crash first occurred. Some crashes require specific environment variables to reproduce — make sure you set them before running.
+  </Step>
+  <Step title="Run the target locally">
+    Execute the downloaded build with the downloaded testcase, using the command line and environment shown in the report. You should see the same crash that ClusterFuzz recorded.
+  </Step>
+</Steps>
+
+## Upload Testcase page
+
+If you have a testcase from an external source — for example, a bug report from a security researcher or output from another fuzzing system — you can submit it through the **Upload Testcase** page. ClusterFuzz will run the testcase against the specified target and create a full report, including minimization and regression bisection where applicable.
+
+<Tip>
+  Uploading a testcase through the UI is the fastest way to bring an externally reported crash into the ClusterFuzz tracking and verification workflow.
+</Tip>
+
+## Testcase minimization
+
+When ClusterFuzz captures a new crash, it automatically attempts to minimize the testcase — that is, reduce it to the smallest input that still triggers the same crash. A minimized testcase is easier to reason about and often makes the root cause more obvious. The minimized testcase is linked from the testcase details page once the process completes.
+
+## Automatic fix verification
+
+Once a day, ClusterFuzz re-runs every open testcase against the latest build. When a crash is no longer reproducible, ClusterFuzz updates the report:
+
+- The **Fixed** status changes to **Yes**.
+- The **Fixed Revision Range** section links to the range of commits that contains the fix.
+- If the testcase was associated with a bug tracker issue, ClusterFuzz posts a comment and updates the issue status to confirm the fix is verified.
+
+<Note>
+  You do not need to manually mark a bug as fixed. ClusterFuzz detects the fix automatically as part of its daily re-run cycle.
+</Note>
+
+## Handling unreliable crashes
+
+ClusterFuzz classifies crashes that do not reproduce consistently as lower priority. However, if a particular crash state is observed very frequently despite having no single reliable testcase, ClusterFuzz will still file a bug for it.
+
+When ClusterFuzz later finds a reliably reproducible testcase for the same crash state, it creates a new report and removes the older unreliable one. For this reason, it is worth waiting a few days before taking action on an unreliable crash.
+
+If you cannot wait, or if no reliable testcase appears, consider these approaches:
+
+<AccordionGroup>
+  <Accordion title="Try to reproduce locally with multiple runs">
+    Run the testcase many times in succession. Some intermittent crashes become consistent under specific conditions such as memory pressure or particular CPU states.
+  </Accordion>
+  <Accordion title="Push a speculative fix">
+    If the stacktrace gives enough information to form a hypothesis, push a fix and let ClusterFuzz monitor whether the crash state stops occurring over the following days.
+  </Accordion>
+  <Accordion title="Automatic closure timelines">
+    If a tracking bug is filed, ClusterFuzz checks crash statistics daily and closes the bug as **Verified** once no instance of the crash state has been seen for **two weeks**. If no bug is filed, unreproducible testcases are closed automatically after **one week** of inactivity.
+  </Accordion>
+</AccordionGroup>

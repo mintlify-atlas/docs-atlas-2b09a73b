@@ -1,0 +1,79 @@
+---
+title: "ClusterFuzz Web Interface: UI Pages and Roles Guide"
+description: "A guide to every page in the ClusterFuzz web UI — what each page shows, what actions it supports, and which user roles can access it."
+---
+
+The ClusterFuzz web interface is designed to be intuitive, and most page elements include tooltips. This page gives a concise tour of every section you will encounter after deploying the server, whether locally or in production, along with the access rules that govern what each type of user can see and do.
+
+## User roles
+
+ClusterFuzz uses three access tiers. Administrators configure which accounts belong to the privileged tier via the **Configuration** page; the administrator tier is managed directly in Google App Engine.
+
+<AccordionGroup>
+  <Accordion title="Regular users">
+    Regular users are typically developers who triage and fix bugs. They can access most of the web interface but with restricted permissions. Regular users can view:
+
+    - Testcases page (excluding security vulnerabilities)
+    - Testcase report pages (excluding security vulnerabilities)
+    - Crash statistics page (excluding security vulnerabilities)
+    - Crashes by range page (excluding security vulnerabilities)
+    - Fuzzer statistics page
+    - Upload Testcase page
+    - Fuzzers page (view only)
+    - Corpora page (view only)
+    - Bots page
+
+    Regular users **cannot** access the Jobs page or the Configuration page.
+  </Accordion>
+
+  <Accordion title="Privileged users">
+    Privileged users have unrestricted access to most parts of ClusterFuzz. In addition to everything a regular user can do, privileged users can:
+
+    - View security bugs (issues where Security is marked **YES**)
+    - Upload new fuzzers on the Fuzzers page
+    - Upload new corpora on the Corpora page
+    - Create new jobs on the Jobs page
+
+    Privileged users are defined by administrators on the Configuration page.
+  </Accordion>
+
+  <Accordion title="Administrators">
+    Administrators have full access to the entire ClusterFuzz web interface. In addition to all privileged-user capabilities, administrators can:
+
+    - Access the Configuration page
+    - Grant privileged access by adding accounts to the **Privileged Users** list
+    - Configure granular user permissions in the **User permissions** section
+  </Accordion>
+</AccordionGroup>
+
+## Interface pages
+
+<CardGroup cols={2}>
+  <Card title="Testcases" icon="bug">
+    The default main page. Shows all issues detected by fuzzers running on ClusterFuzz, with filters for crash type, crash state, fuzzer name, job name, reliability, and security implications. Regular users see non-security issues; privileged users see everything.
+  </Card>
+
+  <Card title="Fuzzer Statistics" icon="chart-bar">
+    Provides a variety of metrics about fuzzer performance. For in-process fuzz targets, the page also includes performance reports, improvement recommendations, and links to per-target metadata. Accessible to all authenticated users.
+  </Card>
+
+  <Card title="Crash Statistics" icon="chart-line">
+    Shows aggregate statistics about crashes detected by ClusterFuzz, including crash frequency, platforms affected, and trends over time. Security-related crash data is restricted to privileged users and administrators.
+  </Card>
+
+  <Card title="Upload Testcase" icon="upload">
+    Lets you submit a single testcase to be run against a specific target. The primary use case is reproducing bugs reported by external researchers or found by other systems. Available to regular users and above.
+  </Card>
+
+  <Card title="Jobs" icon="briefcase">
+    Provides the ability to create new job configurations or modify existing ones. Creating jobs requires privileged access; regular users do not have access to this page at all.
+  </Card>
+
+  <Card title="Configuration" icon="gear">
+    An administrative page covering ClusterFuzz access control, credentials, and a range of other settings. Available to administrators only.
+  </Card>
+</CardGroup>
+
+<Note>
+  Most page elements have tooltips. If you are unsure what a field or button does, hover over it before consulting documentation.
+</Note>

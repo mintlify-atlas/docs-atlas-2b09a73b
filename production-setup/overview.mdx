@@ -1,0 +1,127 @@
+---
+title: "ClusterFuzz Production Deployment on Google Cloud Platform"
+description: "Deploy ClusterFuzz to Google Cloud Platform using butler.py, Firebase authentication, and OAuth credentials to run a full-scale production instance."
+---
+
+Deploying ClusterFuzz to production runs the full system on Google Cloud Platform, enabling all features including continuous fuzzing, regression detection, and automated bug tracking. The setup process creates a Google Cloud project, configures Firebase for authentication, and runs a setup script that provisions the required infrastructure and generates a config directory you can version-control and redeploy from.
+
+## Prerequisites
+
+Before starting, make sure you have completed the [prerequisites](/getting-started/prerequisites) page. You will also need:
+
+- The [Google Cloud SDK](https://cloud.google.com/sdk/) (`gcloud`) installed and authenticated
+- A [Firebase](https://firebase.google.com/) account
+- OAuth credentials (Desktop app type) from the [Google API Console](https://developers.google.com/identity/protocols/OAuth2InstalledApp#creatingcred)
+
+## Setup steps
+
+<Steps>
+  <Step title="Create a new Google Cloud project">
+    Follow the [Google Cloud instructions](https://cloud.google.com/resource-manager/docs/creating-managing-projects) to create a new project. Verify it was created successfully:
+
+    ```bash
+    gcloud projects describe <your project id>
+    ```
+
+    Then export the project ID for use in subsequent steps:
+
+    ```bash
+    export CLOUD_PROJECT_ID=<your project id>
+    ```
+
+    If you are new to Google Cloud, you may be eligible for [free trial credit](https://cloud.google.com/free/docs/gcp-free-tier#free-trial).
+  </Step>
+
+  <Step title="Enable Firebase">
+    1. Follow the [Firebase setup instructions](https://cloud.google.com/appengine/docs/standard/python3/building-app/adding-firebase) to add Firebase to your project. Firebase is used for authentication and does not incur additional charges.
+    2. In the [Firebase console](https://console.firebase.google.com/), go to the **Auth** section and enable **Google** as a sign-in provider.
+    3. In the same **Auth** section, add your intended domains to the **Authorized domains** list. The default App Engine domain is `<your project id>.appspot.com`.
+
+    To obtain your Firebase web API key:
+    1. Go to the [Firebase console](https://console.firebase.google.com/) and select your project.
+    2. From the project overview page, click **Add Firebase to your web app** to display the code snippet.
+    3. Copy the `apiKey` value and export it:
+
+    ```bash
+    export FIREBASE_API_KEY=<your api key>
+    ```
+  </Step>
+
+  <Step title="Create OAuth credentials">
+    Follow the [OAuth credential instructions](https://developers.google.com/identity/protocols/OAuth2InstalledApp#creatingcred) to create credentials for the setup script. When prompted:
+
+    - Choose **OAuth client ID** as the credential type
+    - Choose **Desktop app** as the application type
+    - Fill in the **OAuth consent screen** application name (for example, `MyClusterFuzz`)
+
+    Download the credentials as JSON and store them somewhere safe, then export the path:
+
+    ```bash
+    export CLIENT_SECRETS_PATH=/path/to/your/client_secrets.json
+    ```
+  </Step>
+
+  <Step title="Run the project setup script">
+    Create an empty config directory outside the ClusterFuzz source repository, then run the setup script:
+
+    ```bash
+    mkdir /path/to/myconfig
+    export CONFIG_DIR=/path/to/myconfig
+    python butler.py create_config \
+      --oauth-client-secrets-path=$CLIENT_SECRETS_PATH \
+      --firebase-api-key=$FIREBASE_API_KEY \
+      --project-id=$CLOUD_PROJECT_ID \
+      $CONFIG_DIR
+    ```
+
+    The script automates infrastructure provisioning and performs a test deployment to verify everything is set up correctly. This can take a few minutes.
+  </Step>
+
+  <Step title="Review and customize the config files">
+    After the script finishes, review the configuration files in your `$CONFIG_DIR` directory. Common settings to adjust:
+
+    - **`project.yaml`** — Change the default project name using the `env.PROJECT_NAME` attribute
+    - **`gae/auth.yaml`** — Grant access to all users in a domain using the `whitelisted_domains` attribute
+    - **`gae/config.yaml`** — Use a custom domain instead of `appspot.com` using the `domains` attribute
+
+    <Tip>
+      Check your config directory into version control to track changes and prevent accidental loss.
+    </Tip>
+  </Step>
+
+  <Step title="Deploy">
+    Once configuration is complete, deploy ClusterFuzz to production:
+
+    ```bash
+    python butler.py deploy --config-dir=$CONFIG_DIR --prod --force
+    ```
+  </Step>
+</Steps>
+
+## Verification
+
+After deployment, verify the instance is running correctly:
+
+- Open `https://<your project id>.appspot.com` in a browser. If you see an error about missing datastore indexes, wait a few minutes — indexes can take time to generate after the first deployment. You can check index status in the [App Engine datastore console](https://appengine.google.com/datastore/indexes).
+- Verify that bots were created by checking the **Bots** page in the ClusterFuzz UI. By default, the setup creates 1 regular Linux bot and 2 [preemptible](https://cloud.google.com/preemptible-vms/) Linux bots on Google Compute Engine.
+
+## Deploying subsequent changes
+
+After the initial setup, deploy further changes by running the same deploy command:
+
+```bash
+python butler.py deploy --config-dir=$CONFIG_DIR --prod --force
+```
+
+This command should also be run after modifying `clusters.yaml` or any other config file. An App Engine cron job will periodically read the cluster configuration and create or remove instances as needed.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Build pipeline" icon="hammer" href="/production-setup/build-pipeline">
+    Set up continuous builds so ClusterFuzz always fuzzes the latest version of your targets.
+  </Card>
+  <Card title="Setting up bots" icon="server" href="/production-setup/setting-up-bots">
+    Configure GCE bot clusters and non-GCE machines for your fuzzing workload.
+  </Card>
+</CardGroup>

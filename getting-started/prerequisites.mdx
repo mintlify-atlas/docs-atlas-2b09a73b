@@ -1,0 +1,147 @@
+---
+title: "Setting Up Your ClusterFuzz Development Environment"
+description: "Install Python 3.11, Go, and project dependencies to prepare your machine for local ClusterFuzz development on Linux or macOS with pipenv."
+---
+
+Before you can run ClusterFuzz locally, you need to install a small set of tools and pull the source code. Local development is primarily supported on **Linux**. macOS support is experimental and requires [Homebrew](https://brew.sh/). If you prefer to skip manual setup entirely, consider using the [devcontainer approach](/getting-started/local-instance#development-containers-recommended), which provides a fully configured environment out of the box.
+
+## Requirements
+
+ClusterFuzz depends on [Google Cloud Platform](https://cloud.google.com) services in production, but you can run it locally without cloud credentials for development and testing. See the Architecture page for more details on which features require cloud access.
+
+Supported platforms for local development:
+
+- **Ubuntu** 16.04, 17.10, 18.04, 18.10, 20.04
+- **Debian** 8 (jessie) or later
+- **macOS** with [Homebrew](https://brew.sh/) (experimental)
+
+<Note>
+  Only x86 architectures are currently supported.
+</Note>
+
+## Getting the code
+
+<Steps>
+  <Step title="Clone the repository">
+    Clone the ClusterFuzz repository to your local machine:
+
+    ```bash
+    git clone https://github.com/google/clusterfuzz
+    cd clusterfuzz
+    git pull
+    ```
+  </Step>
+  <Step title="Check out a release tag">
+    The `master` branch may contain unstable changes. For development, check out the [latest release](https://github.com/google/clusterfuzz/releases/latest):
+
+    ```bash
+    git checkout tags/vX.Y.Z
+    ```
+
+    Replace `X.Y.Z` with the release version, for example `1.0.1`.
+  </Step>
+</Steps>
+
+## Installing prerequisites
+
+<Note>
+  For a consistent environment without manual setup, consider using [Development Containers](/getting-started/local-instance#development-containers-recommended) instead of the steps below.
+</Note>
+
+### Google Cloud SDK
+
+This step is only required on **macOS**. On Linux, the installation script installs the Google Cloud SDK for you in the next step.
+
+Install the Google Cloud SDK by following the [online instructions](https://cloud.google.com/sdk/).
+
+### Python 3.11
+
+ClusterFuzz requires Python 3.11. [Download Python 3.11](https://www.python.org/downloads/release/python-3114/) and install it. If you already have Python installed, verify the version:
+
+```bash
+python --version
+```
+
+We recommend building from the official Python source, as this installs the required headers and pip. If you build from source, include the `--with-ensurepip=install` flag to ensure pip is available.
+
+<Tip>
+  You do not need `pyenv` to manage Python versions for ClusterFuzz. Instead, set the Python version directly in the pipenv shell.
+</Tip>
+
+### Go
+
+Install the Go programming language by following the [official installation guide](https://golang.org/doc/install).
+
+### Other dependencies
+
+Run the provided script to install all remaining development dependencies:
+
+```bash
+local/install_deps.bash
+```
+
+This script supports Ubuntu, Debian, and macOS with Homebrew. It also installs the Google Cloud SDK on Linux.
+
+## Activating the pipenv shell
+
+After the dependency script completes, activate the pipenv environment to load all Python dependencies:
+
+```bash
+pipenv shell
+```
+
+Verify the setup by running:
+
+```bash
+python butler.py --help
+```
+
+You should see the `butler.py` help output listing available commands.
+
+## Troubleshooting dependency issues
+
+If you encounter errors related to Python versioning, explicitly pass the Python version to the install script:
+
+```bash
+PYTHON=python3.11 ./local/install_deps.bash
+```
+
+Then activate the shell and confirm the version:
+
+```bash
+pipenv shell
+python --version
+```
+
+If the version shown is not 3.11, set it explicitly in pipenv:
+
+```bash
+pipenv install --python 3.11
+```
+
+<AccordionGroup>
+  <Accordion title="Python version is still wrong after setting it">
+    You may still be inside an existing virtual environment even after running `exit`. If you see `(clusterfuzz)` before your prompt, you are still in the virtual environment. Run `deactivate` to exit it fully, then start a fresh shell:
+
+    ```bash
+    deactivate
+    python3.11 -m pipenv shell
+    ```
+  </Accordion>
+  <Accordion title="Missing config.yaml error when running tests">
+    If you see an error about a missing `config.yaml`, sync the pipenv environment's dependencies:
+
+    ```bash
+    cd src
+    pipenv sync
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+Once your environment is set up, you are ready to start a local ClusterFuzz instance.
+
+<Card title="Running a local instance" icon="play" href="/getting-started/local-instance">
+  Start a local ClusterFuzz server and bot to test core functionality on your machine.
+</Card>

@@ -1,22 +1,11 @@
 {
-  "$schema": "https://mintlify.com/docs.json",
-  "name": "ClusterFuzz",
+  "projectType": "infrastructure",
+  "projectName": "ClusterFuzz",
+  "projectDescription": "A scalable fuzzing infrastructure that finds security and stability issues in software, used by Google and powering OSS-Fuzz.",
   "theme": "aspen",
-  "colors": {
-    "primary": "#242b2c"
-  },
-  "favicon": "https://media.brand.dev/2e6418ed-4b30-4a19-b98e-619abc464ccc.png",
-  "navbar": {
-    "primary": {
-      "type": "github",
-      "href": "https://github.com/google/clusterfuzz"
-    }
-  },
-  "footer": {
-    "socials": {
-      "github": "https://github.com/google/clusterfuzz"
-    }
-  },
+  "primaryColor": "#242b2c",
+  "lightColor": null,
+  "darkColor": null,
   "navigation": {
     "tabs": [
       {
@@ -68,5 +57,29 @@
         ]
       }
     ]
-  }
+  },
+  "keyFeatures": [
+    "Highly scalable fuzzing infrastructure (up to 100,000 VMs)",
+    "Support for libFuzzer, AFL, AFL++, and Honggfuzz engines",
+    "Automatic crash deduplication and bug triage",
+    "Integration with issue trackers (Monorail, Jira)",
+    "Continuous build pipeline with regression bisection",
+    "Testcase minimization",
+    "Code coverage reporting and statistics",
+    "Web interface for crash management and fuzzer performance",
+    "Blackbox and coverage-guided (greybox) fuzzing support",
+    "Firebase-based authentication and access control"
+  ],
+  "publicApiSurface": [
+    "butler.py run_server",
+    "butler.py run_bot",
+    "butler.py create_config",
+    "butler.py deploy",
+    "butler.py py_unittest",
+    "butler.py lint",
+    "butler.py format",
+    "Job environment variables: APP_NAME, APP_ARGS, CUSTOM_BINARY, RELEASE_BUILD_BUCKET_PATH, CORPUS_PRUNE, TEST_TIMEOUT",
+    "Blackbox fuzzer interface: --input_dir, --output_dir, --no_of_files",
+    "Build pipeline: .srcmap.json format, GCS bucket integration"
+  ]
 }

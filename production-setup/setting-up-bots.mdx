@@ -1,0 +1,159 @@
+---
+title: "Configuring ClusterFuzz Bots on GCE and Custom Machines"
+description: "Set up Linux, Windows, and macOS fuzzing bots on Google Compute Engine or your own hardware using clusters.yaml, instance templates, and Docker images."
+---
+
+ClusterFuzz bots are the machines that run fuzzing tasks. By default, the production setup script creates a small cluster of Linux bots on Google Compute Engine, but you can configure any number of bots across Linux, Windows, and macOS — either on GCE or on your own hardware using Docker. Bot configuration lives in `$CONFIG_DIR/gce/clusters.yaml`, and changes take effect after redeployment.
+
+## Supported platforms
+
+<CardGroup cols={3}>
+  <Card title="Linux" icon="linux">
+    The preferred platform. Supports all sanitizer and fuzzing engine types. Each sanitizer should have its own build and job definition for best performance.
+  </Card>
+  <Card title="Windows" icon="windows">
+    Supported for fuzzing. Only AddressSanitizer and libFuzzer are available on Windows. Requires setting an administrator password before enabling bots.
+  </Card>
+  <Card title="macOS" icon="apple">
+    Supported for fuzzing with AddressSanitizer, LeakSanitizer, UndefinedBehaviorSanitizer, and ThreadSanitizer. Only libFuzzer is supported. Not available on GCE — must run on physical hardware or a compatible virtualization layer.
+  </Card>
+</CardGroup>
+
+<Note>
+  It is recommended to use preemptible bots for most of your cluster because they are significantly cheaper and perform nearly as well as regular bots. You still need a small number of regular (non-preemptible) bots to handle post-crash tasks such as minimization and regression analysis.
+</Note>
+
+## Google Compute Engine bots
+
+### Configuring a cluster
+
+Edit `$CONFIG_DIR/gce/clusters.yaml` to define your bot clusters. Cluster definitions live under the `<your project id>/clusters` key in that file. Below is an example with one regular Linux bot and two preemptible Linux bots:
+
+```yaml
+# Regular bots run all task types (e.g fuzzing, minimize, etc).
+clusterfuzz-linux:
+  gce_zone: gce-zone
+  instance_count: 1
+  instance_template: clusterfuzz-linux
+  distribute: False
+
+# Pre-emptible bots must have '-pre-' in name. They only run fuzzing tasks.
+clusterfuzz-linux-pre:
+  gce_zone: gce-zone
+  instance_count: 2
+  instance_template: clusterfuzz-linux-pre
+  distribute: False
+```
+
+Uncomment the cluster definition you want to enable, then set `gce_zone` (for example, `us-central1-a`) and `instance_count` to match your needs. You can also reference a custom [instance template](#instance-templates) from here.
+
+### Instance templates
+
+[Instance templates](https://cloud.google.com/compute/docs/instance-templates) define the hardware properties of each bot — source image, disk size, network configuration, and more. They are defined in the same `clusters.yaml` file, after the cluster definitions. Below is an example for a regular Linux bot:
+
+```yaml
+instance_templates:
+  - name: clusterfuzz-linux
+    description: '{"version": 1}'
+    properties:
+      machineType: n1-standard-1
+      disks:
+        - boot: true
+          autoDelete: true
+          initializeParams:
+            sourceImage: projects/cos-cloud/global/images/family/cos-stable
+            diskSizeGb: 100
+            diskType: pd-standard
+      metadata:
+        items:
+          - key: docker-image
+            value: gcr.io/clusterfuzz-images/base:c44bf3f-201902112042
+          - key: user-data
+            value: file://linux-init.yaml
+      serviceAccounts:
+        - email: my-project-id-service-account-email
+          scopes:
+            - https://www.googleapis.com/auth/cloud-platform
+            - https://www.googleapis.com/auth/prodxmon
+      networkInterfaces:
+        - network: global/networks/default
+          accessConfigs:
+            - type: ONE_TO_ONE_NAT
+              name: 'External NAT'
+```
+
+You can adjust `diskSizeGb` and `machineType` to meet your storage and compute requirements.
+
+<Warning>
+  After modifying an instance template, you must increment the `version` number in the `description` field by 1. Otherwise, the change will not be applied to existing instances.
+</Warning>
+
+### Windows password setup
+
+Before enabling Windows bots on GCE, set the administrator password in the project metadata. The password must satisfy Windows password policy requirements:
+
+```bash
+gcloud compute project-info add-metadata \
+  --metadata-from-file=windows-password=/path/to/password-file \
+  --project=$CLOUD_PROJECT_ID
+```
+
+This allows you to connect to Windows bots via Remote Desktop using the `clusterfuzz` username and the configured password.
+
+## Non-GCE bots
+
+Bots do not have to run on Google Compute Engine. You can run ClusterFuzz bots on your own hardware or another cloud provider. macOS bots, for example, must run this way because macOS is not available on GCE.
+
+### Service account requirements
+
+Non-GCE machines must authenticate using a [service account key](https://cloud.google.com/docs/authentication/getting-started) to access the Google Cloud services that ClusterFuzz depends on (Cloud Datastore, Cloud Storage, and others).
+
+### Setting up a macOS bot
+
+<Steps>
+  <Step title="Create a service account key">
+    Follow the [Google Cloud authentication instructions](https://cloud.google.com/docs/authentication/getting-started) to create a service account key. Choose the **Compute Engine** service account type and **JSON** key format.
+  </Step>
+  <Step title="Transfer the key to the macOS machine">
+    Securely copy the downloaded JSON key file to the macOS computer.
+  </Step>
+  <Step title="Run the startup script">
+    Set the required environment variables and execute the provided setup script:
+
+    ```bash
+    export CLOUD_PROJECT_ID=<your project id>
+    export CONFIG_DIR=/path/to/myconfig
+    export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
+    export INSTALL_DIRECTORY=/path/where/to/install/clusterfuzz-and-dependencies/to
+    $CONFIG_DIR/bot/setup/mac.bash
+    ```
+  </Step>
+</Steps>
+
+### Docker images
+
+ClusterFuzz provides [Docker images](https://github.com/google/clusterfuzz/tree/master/docker) for running bots on non-GCE Linux machines. These images contain all the dependencies required to run the bot software.
+
+## Deploying bot configuration changes
+
+After modifying `clusters.yaml`, you must redeploy for the changes to take effect:
+
+```bash
+python butler.py deploy --config-dir=$CONFIG_DIR --prod --force
+```
+
+An App Engine cron job will then read the updated cluster configuration and create or remove instances as needed.
+
+## Verification
+
+### GCE bots
+
+After deployment, check the [GCE instance groups console](https://console.cloud.google.com/compute/instanceGroups/list) to confirm that all instances were created for your cluster. A spinning indicator next to an instance group for more than a few minutes usually indicates an error — click the group name to view the error message.
+
+<Note>
+  The default GCP quota for CPUs, in-use IP addresses, and persistent disk capacity may be insufficient for larger fuzzing clusters. Check your current quota in the [IAM quotas console](https://console.cloud.google.com/iam-admin/quotas) and request increases as needed.
+</Note>
+
+### Non-GCE bots
+
+Non-GCE bots should start within a minute after the startup script finishes. Verify that the bot is running by checking that its hostname appears on the **Bots** page in the ClusterFuzz UI.

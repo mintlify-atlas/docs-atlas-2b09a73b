@@ -1,0 +1,102 @@
+---
+title: "Coverage-guided vs blackbox fuzzing in ClusterFuzz"
+description: "Compare coverage-guided and blackbox fuzzing: how each approach works, which engines are supported, and guidance on choosing the right approach for your target."
+---
+
+ClusterFuzz supports two distinct fuzzing strategies: coverage-guided fuzzing and blackbox fuzzing. Understanding the difference helps you pick the right approach for your target and get the most out of the platform.
+
+<Tabs>
+  <Tab title="Coverage-guided fuzzing">
+    Coverage-guided fuzzing (also known as greybox fuzzing) uses program instrumentation to trace the code coverage reached by each input fed to a [fuzz target](/reference/glossary#fuzz-target). Fuzzing engines use this information to make informed decisions about which inputs to mutate in order to maximize coverage.
+
+    For every target, the fuzzing engine builds a [corpus](/reference/glossary#corpus) of inputs. These grow in coverage over time as the engine discovers new inputs through mutation.
+
+    <Note>
+      Coverage-guided fuzzing is the recommended approach — it is generally the most effective fuzzing strategy available in ClusterFuzz.
+    </Note>
+
+    ### Supported engines
+
+    <CardGroup cols={2}>
+      <Card title="libFuzzer" icon="bolt" href="https://llvm.org/docs/LibFuzzer.html">
+        The recommended coverage-guided fuzzing engine. Tightly integrated with LLVM sanitizers and corpus management.
+      </Card>
+      <Card title="AFL" icon="bug" href="http://lcamtuf.coredump.cx/afl/">
+        American Fuzzy Lop. An alternative coverage-guided engine also supported by ClusterFuzz.
+      </Card>
+    </CardGroup>
+
+    ### When to use coverage-guided fuzzing
+
+    Coverage-guided fuzzing works best when:
+
+    - The target is self-contained.
+    - The target is deterministic.
+    - The target can execute dozens or more times per second (ideally hundreds or more).
+
+    <Tip>
+      Binary format parsers — for example, image format parsers — are very well suited to coverage-guided fuzzing.
+    </Tip>
+
+    ### How it works
+
+    <Steps>
+      <Step title="Instrument the target">
+        Compile your fuzz target with an LLVM-based toolchain so the binary emits coverage information at runtime.
+      </Step>
+      <Step title="Seed the corpus">
+        Provide an initial set of inputs, or let the engine start from a minimal seed. ClusterFuzz manages the corpus per fuzz target.
+      </Step>
+      <Step title="Mutate and measure">
+        The fuzzing engine mutates existing inputs and runs the target. Any input that reaches new code coverage is added to the corpus.
+      </Step>
+      <Step title="Grow coverage over time">
+        The corpus grows as the engine discovers new execution paths, progressively exploring more of the target's code.
+      </Step>
+    </Steps>
+  </Tab>
+
+  <Tab title="Blackbox fuzzing">
+    A blackbox fuzzer generates inputs for a target program without knowledge of its internal behaviour or implementation.
+
+    A blackbox fuzzer may generate inputs from scratch, or rely on a static corpus of valid input files to base mutations on. Unlike coverage-guided fuzzing, the corpus does not grow — there is no coverage feedback to guide mutations.
+
+    ### When to use blackbox fuzzing
+
+    Blackbox fuzzing works well when:
+
+    - The target is large.
+    - The target is not deterministic for the same input.
+    - The target is slow.
+    - The input format is complicated or highly structured (for example, a programming language such as JavaScript).
+
+    <Tip>
+      A browser DOM fuzzer that generates HTML inputs and runs them against a target like Chrome — without any coverage feedback — is a classic example of blackbox fuzzing.
+    </Tip>
+
+    ### How it works
+
+    <Steps>
+      <Step title="Define the fuzzer">
+        Write or configure a fuzzer program that generates or mutates inputs in the target's expected format.
+      </Step>
+      <Step title="Provide a static corpus">
+        Supply a set of valid input files. The corpus does not change during fuzzing — the fuzzer uses it as a base for mutations.
+      </Step>
+      <Step title="Run and observe">
+        ClusterFuzz runs the target against each generated input and monitors for crashes. There is no instrumentation or coverage feedback.
+      </Step>
+    </Steps>
+  </Tab>
+</Tabs>
+
+## Choosing an approach
+
+<CardGroup cols={2}>
+  <Card title="Use coverage-guided when..." icon="chart-line">
+    Your target is fast, deterministic, and self-contained. This is the default recommendation for most fuzz targets.
+  </Card>
+  <Card title="Use blackbox when..." icon="box">
+    Your target is large, slow, or non-deterministic, or when the input format is too complex to benefit from mutation-based coverage feedback.
+  </Card>
+</CardGroup>

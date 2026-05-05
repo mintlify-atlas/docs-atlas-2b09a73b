@@ -1,0 +1,37 @@
+---
+title: "ClusterFuzz FAQ: Languages, Toolchains, and Limitations"
+description: "Answers to common questions about ClusterFuzz language support, LLVM toolchain requirements, using GCC, and why memory-safe languages have limited support."
+---
+
+This page answers the most commonly asked questions about ClusterFuzz compatibility, toolchain requirements, and language support. If your question is not covered here, check the rest of the reference section or open an issue on GitHub.
+
+<AccordionGroup>
+  <Accordion title="What languages does ClusterFuzz support?">
+    ClusterFuzz definitively supports C and C++ when compiled with [Clang](https://clang.llvm.org/). It has also been tested with Rust and may work with other languages that can be compiled with an LLVM-based toolchain, such as Swift.
+  </Accordion>
+
+  <Accordion title="Why is an LLVM-based toolchain needed for full support?">
+    An LLVM-based toolchain is required for full ClusterFuzz support for two reasons:
+
+    1. ClusterFuzz relies on LLVM [sanitizers](/reference/glossary#sanitizer) for detecting and identifying bugs.
+    2. Using libFuzzer and AFL in ClusterFuzz requires coverage instrumentation that only LLVM can provide.
+
+    <Note>
+      Both of these capabilities — sanitizer integration and coverage instrumentation — are only available through an LLVM-based build.
+    </Note>
+  </Accordion>
+
+  <Accordion title="What if I really don't want to use an LLVM-based toolchain?">
+    The ClusterFuzz team strongly recommends using an LLVM-based toolchain. That said, you may be able to use some parts of ClusterFuzz with [GCC](https://gcc.gnu.org/) or extend ClusterFuzz to support GCC. However, this is unsupported and untested territory.
+
+    <Warning>
+      If you use GCC, you are on your own — the ClusterFuzz team cannot provide support for this configuration.
+    </Warning>
+
+    GCC may work for [blackbox fuzzing](/reference/fuzzing-approaches) without modifying ClusterFuzz, since GCC supports ASan. Using GCC with AFL or libFuzzer would likely require considerable changes to ClusterFuzz to get working. In practice, it is probably easier to make whatever changes are needed to build with Clang.
+  </Accordion>
+
+  <Accordion title="Why isn't my language supported?">
+    In theory, ClusterFuzz is language-agnostic and can be extended to support fuzzing code written in any language. In practice, it is less productive to look for interesting bugs in [memory-safe](https://en.wikipedia.org/wiki/Memory_safety) languages, so ClusterFuzz does not have built-in support for fuzzing most of them.
+  </Accordion>
+</AccordionGroup>

@@ -1,0 +1,91 @@
+---
+title: "Fuzzing Approaches on ClusterFuzz: Coverage vs Blackbox"
+description: "Compare coverage-guided and blackbox fuzzing on ClusterFuzz, understand key concepts, and choose the right approach for your fuzzing target."
+---
+
+ClusterFuzz supports two complementary fuzzing strategies: coverage-guided fuzzing and blackbox fuzzing. Coverage-guided fuzzing uses compiler instrumentation to track which code paths each input exercises, allowing the fuzzing engine to evolve a corpus that maximises code coverage over time. Blackbox fuzzing generates or mutates inputs with no knowledge of program internals, making it suitable for large, slow, or non-deterministic targets where instrumentation is impractical. Choosing the right approach depends on your target's architecture, speed, and input format.
+
+## Key concepts
+
+<AccordionGroup>
+  <Accordion title="Fuzz target">
+    A fuzz target is a function or program entry point that accepts a single input and exercises a code path you want to test. For coverage-guided fuzzing, this is typically a C/C++ function with the signature `LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)`. For blackbox fuzzing, it is the full application binary.
+  </Accordion>
+  <Accordion title="Fuzzing engine">
+    A fuzzing engine drives the fuzzing loop. It selects inputs from the corpus, mutates them, runs the fuzz target, and observes the outcome. ClusterFuzz supports libFuzzer, AFL++, and Honggfuzz as coverage-guided engines.
+  </Accordion>
+  <Accordion title="Corpus">
+    A corpus is the collection of inputs maintained by the fuzzing engine. In coverage-guided fuzzing the corpus grows automatically as the engine discovers inputs that reach new code paths. In blackbox fuzzing the corpus is static — it does not grow during a run.
+  </Accordion>
+  <Accordion title="Sanitizers">
+    Sanitizers are compiler-based runtime checkers that detect memory safety issues, undefined behaviour, and other bugs. The most commonly used sanitizer for fuzzing is AddressSanitizer (ASan), which detects out-of-bounds reads and writes, use-after-free, and related memory errors. Other options include MemorySanitizer (MSan), UndefinedBehaviorSanitizer (UBSan), and ThreadSanitizer (TSan).
+  </Accordion>
+</AccordionGroup>
+
+## Comparing the two approaches
+
+<Tabs>
+  <Tab title="Coverage-guided">
+    Coverage-guided fuzzing (also called greybox fuzzing) instruments the target at compile time. Each time the engine runs an input, it observes which code branches were taken. Inputs that reach previously unseen branches are added to the corpus and used as the basis for further mutations.
+
+    **Engines supported:** libFuzzer (recommended), AFL++, Honggfuzz
+
+    **Best for:**
+    - Self-contained targets with a single, well-defined entry point
+    - Deterministic targets that produce the same output for the same input
+    - Fast targets that can execute hundreds of times per second
+    - Binary format parsers such as image, audio, or archive format readers
+  </Tab>
+  <Tab title="Blackbox">
+    Blackbox fuzzing treats the target as an opaque program. The fuzzer generates or mutates inputs from a static corpus and passes them to the target with no coverage feedback. This makes it applicable to targets where instrumentation is infeasible.
+
+    **Best for:**
+    - Large, complex targets such as browsers or JavaScript engines
+    - Non-deterministic targets where the same input may produce different results
+    - Slow targets where the overhead of instrumentation would dominate execution time
+    - Highly structured or grammar-based input formats such as programming languages
+  </Tab>
+</Tabs>
+
+### Side-by-side comparison
+
+| Property | Coverage-guided | Blackbox |
+|---|---|---|
+| Instrumentation required | Yes (Clang) | No |
+| Corpus growth | Automatic, coverage-driven | Static |
+| Corpus pruning | Supported (libFuzzer ASan) | Not supported |
+| Crash minimization | Supported | Not supported |
+| Target speed requirement | Fast (hundreds/sec ideal) | Slow targets acceptable |
+| Determinism requirement | Deterministic | Non-deterministic acceptable |
+| Typical targets | Format parsers, libraries | Browsers, interpreters |
+
+## When to use each approach
+
+<Note>
+  Coverage-guided fuzzing is the recommended default. Use blackbox fuzzing when your target cannot be compiled with Clang instrumentation, is too slow to benefit from coverage feedback, or accepts a highly structured input format that is better handled by a grammar-based generator.
+</Note>
+
+**Use coverage-guided fuzzing when:**
+
+- You can compile your target with Clang 6.0 or later
+- The target is a library or self-contained binary with a clear input boundary
+- The target runs fast enough to complete dozens of executions per second
+- You want automatic corpus management and crash minimization
+
+**Use blackbox fuzzing when:**
+
+- The target is a large application like a browser or media player
+- The target is non-deterministic for the same input
+- The input format is complex or grammar-based, such as JavaScript or HTML
+- You want full control over input generation through a custom fuzzer program
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Coverage-guided fuzzing" icon="crosshairs" href="/fuzzing/coverage-guided">
+    Set up libFuzzer or AFL++ targets, create job types, and configure corpus pruning and dictionaries.
+  </Card>
+  <Card title="Blackbox fuzzing" icon="box" href="/fuzzing/blackbox-fuzzing">
+    Build sanitizer-instrumented binaries, define job types, and upload a custom blackbox fuzzer program.
+  </Card>
+</CardGroup>

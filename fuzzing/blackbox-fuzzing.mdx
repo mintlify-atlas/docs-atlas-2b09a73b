@@ -1,0 +1,144 @@
+---
+title: "Blackbox Fuzzing Setup: Jobs, Builds, and Fuzzers"
+description: "Compile sanitizer-instrumented builds, define blackbox job types, and upload a custom fuzzer program to ClusterFuzz for blackbox fuzzing."
+---
+
+Blackbox fuzzing runs a custom fuzzer program that generates or mutates test inputs without compiler instrumentation or coverage feedback. ClusterFuzz acts as the orchestrator: it schedules fuzzer runs on bots, feeds output files to the target binary, and reports crashes. This approach suits large applications, non-deterministic targets, and programs that accept complex or grammar-based input formats. To get started, you need a sanitizer-instrumented build of your target, a job type definition, and a fuzzer program that follows ClusterFuzz's interface contract.
+
+## Providing builds
+
+Before creating a job, compile your target with a sanitizer so that ClusterFuzz can detect bugs at runtime. The most commonly used sanitizer for blackbox fuzzing is AddressSanitizer (ASan). Clang is the supported compiler, though GCC may also work for some targets.
+
+At a minimum, add `-fsanitize=address` to your C/C++ compiler and linker flags:
+
+```bash
+$CXX -fsanitize=address -o app app.cc
+```
+
+Package the compiled binary and all runtime dependencies into a zip archive:
+
+```bash
+zip app-build.zip app
+```
+
+You will upload this zip when creating the job.
+
+## Creating a job type
+
+A job type specifies how ClusterFuzz should run your target binary. For blackbox fuzzing, you define environment variables that name the binary, pass arguments, and set runtime limits.
+
+### Naming conventions
+
+The job name **must** include the sanitizer name to allow ClusterFuzz to apply the correct symbolizer and crash parser. Valid sanitizer strings are **`asan`**, **`msan`**, **`ubsan`**, and **`tsan`**. For example, `asan_linux_app` is a valid job name.
+
+### Job definition
+
+A basic job definition for a binary called `app` looks like this:
+
+```
+APP_NAME = app
+APP_ARGS = --some_interesting_option --some_very_important_option
+REQUIRED_APP_ARGS = --some_very_important_option
+CUSTOM_BINARY = True
+TEST_TIMEOUT = 30
+```
+
+Each variable has a specific role:
+
+| Variable | Description |
+|---|---|
+| `APP_NAME` | The filename of the target binary inside the build zip. |
+| `APP_ARGS` | All arguments to pass to the target, including optional ones. |
+| `REQUIRED_APP_ARGS` | Arguments that must always be present. ClusterFuzz may remove other `APP_ARGS` during testcase minimization if they are not needed to reproduce a crash. |
+| `CUSTOM_BINARY` | Set to `True` to use your uploaded zip rather than a GCS build pipeline. |
+| `TEST_TIMEOUT` | Maximum time in seconds ClusterFuzz waits for the target to process one testcase before treating it as a timeout. |
+
+### Job creation steps
+
+<Steps>
+  <Step title="Navigate to the Jobs page">
+    Open the ClusterFuzz web UI and go to the **Jobs** page.
+  </Step>
+  <Step title="Open the ADD NEW JOB form">
+    Scroll down to the **ADD NEW JOB** form.
+  </Step>
+  <Step title="Fill out the name and platform">
+    Enter a job name that includes the sanitizer string (for example, `asan_linux_app`) and set the **Platform** field.
+  </Step>
+  <Step title="Enter the environment string">
+    Paste your job definition variables into the **Environment String** field:
+
+    ```
+    APP_NAME = app
+    APP_ARGS = --some_interesting_option --some_very_important_option
+    REQUIRED_APP_ARGS = --some_very_important_option
+    CUSTOM_BINARY = True
+    TEST_TIMEOUT = 30
+    ```
+  </Step>
+  <Step title="Upload your build">
+    Under **Custom Build**, select the zip archive containing your sanitizer-instrumented binary.
+  </Step>
+  <Step title="Add the job">
+    Click **ADD** to save the job.
+  </Step>
+</Steps>
+
+## Uploading a fuzzer
+
+A blackbox fuzzer is a standalone program that reads a corpus from an input directory and writes mutated or generated testcases to an output directory. ClusterFuzz calls this program on each bot, then runs the target binary against the output files.
+
+### Fuzzer interface requirements
+
+Your fuzzer program must accept the following named arguments:
+
+| Argument | Description |
+|---|---|
+| `--input_dir <directory>` | The corpus directory. ClusterFuzz populates this with existing corpus files before each run. |
+| `--output_dir <directory>` | The output directory. Write all generated testcases here. |
+| `--no_of_files <n>` | The number of testcases to write to the output directory. |
+
+Each output file must have the filename prefix `fuzz-`. This prefix tells ClusterFuzz which files to run against the target. The output directory must also include any data dependencies needed to execute the testcases.
+
+The fuzzer's main entry point must be a file whose name starts with `run`. For example, a Python fuzzer may be named `run.py`.
+
+### Fuzzer upload steps
+
+Package your fuzzer program and its dependencies into a zip archive, then follow these steps:
+
+<Steps>
+  <Step title="Navigate to the Fuzzers page">
+    Open the ClusterFuzz web UI and go to the **Fuzzers** page.
+  </Step>
+  <Step title="Create a new fuzzer">
+    Click the **CREATE NEW** button.
+  </Step>
+  <Step title="Fill out the fuzzer name">
+    Enter a name for your fuzzer in the **Name** field.
+  </Step>
+  <Step title="Select the fuzzer archive">
+    Choose the zip archive containing your fuzzer program and its dependencies.
+  </Step>
+  <Step title="Assign jobs">
+    Click **Select/modify jobs** and mark the job or jobs you created in the previous section.
+  </Step>
+  <Step title="Submit">
+    Click **SUBMIT** to upload the fuzzer.
+  </Step>
+</Steps>
+
+<Tip>
+  You can assign a single fuzzer to multiple jobs. This is useful if you have multiple sanitizer builds of the same target and want to fuzz all of them with the same fuzzer program.
+</Tip>
+
+## Checking results
+
+After uploading, bots need time to pull and schedule the new fuzzer. Use the following pages to monitor progress:
+
+- **Bots page** — Shows which bots are currently running your fuzzer and their status.
+- **Fuzzers page** — Displays a sample console output from the most recent run and a sample testcase for each fuzzer in the second column.
+- **Bot logs** — Provide detailed per-run output. Tail the log file at `<bot_directory>/clusterfuzz/bot/logs/bot.log` on the bot machine to see the fuzzer's standard output and any errors.
+
+<Note>
+  Allow a few minutes after uploading before expecting bots to pick up the new fuzzer. The scheduler distributes tasks periodically, so there may be a short delay before the first run appears.
+</Note>

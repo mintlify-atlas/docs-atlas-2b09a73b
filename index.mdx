@@ -1,133 +1,57 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
-icon: 'star'
+title: "ClusterFuzz: Google's Scalable Fuzzing Infrastructure"
+description: "ClusterFuzz is Google's open-source fuzzing platform — automated crash detection, deduplication, and triage at scale for security and stability."
 ---
 
-## Setting up
+ClusterFuzz is a scalable fuzzing infrastructure that finds security and stability issues in software. Google uses ClusterFuzz to fuzz all Google products and as the fuzzing backend for OSS-Fuzz, where it has found over 27,000 bugs in Google products and 36,000+ vulnerabilities across hundreds of open source projects.
 
-Get your documentation site up and running in minutes.
-
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Get Started" icon="rocket" href="/introduction">
+    Learn what ClusterFuzz is and how it works before setting up your first instance.
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Local Instance" icon="laptop" href="/getting-started/local-instance">
+    Run ClusterFuzz locally for development and testing in minutes.
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="Production Deployment" icon="server" href="/production-setup/overview">
+    Deploy ClusterFuzz on Google Cloud with full production capabilities.
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="Setting Up Fuzzing" icon="bug" href="/fuzzing/overview">
+    Configure coverage-guided and blackbox fuzzing for your targets.
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## Why ClusterFuzz?
 
-Everything you need to create world-class documentation.
+ClusterFuzz provides an end-to-end automated fuzzing pipeline — from running fuzz targets across thousands of bots to deduplicating crashes, filing bugs, and verifying fixes.
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
+<CardGroup cols={2}>
+  <Card title="Coverage-Guided Fuzzing" icon="chart-line" href="/fuzzing/coverage-guided">
+    Use libFuzzer, AFL++, and Honggfuzz with corpus management and ensemble fuzzing strategies.
   </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
+  <Card title="Blackbox Fuzzing" icon="box" href="/fuzzing/blackbox-fuzzing">
+    Fuzz large, non-deterministic targets like browsers with custom fuzzer programs.
   </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
+  <Card title="Crash Triage Workflows" icon="list-check" href="/using/triaging-crashes">
+    Filter, deduplicate, and investigate crashes with regression range analysis.
   </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
+  <Card title="Reference" icon="book" href="/reference/glossary">
+    Glossary, job definition options, and frequently asked questions.
   </Card>
-</Columns>
+</CardGroup>
 
-## Make your content agent ready
+## How it works
 
-Make your docs work for humans and AI agents alike.
-
-<Columns cols={2}>
-  <Card
-    title="Prompt component"
-    icon="robot"
-    href="/agent-ready/prompt"
-  >
-    Embed shareable AI prompts readers can copy or open in Cursor.
-  </Card>
-  <Card
-    title="Visibility"
-    icon="eye"
-    href="/agent-ready/visibility"
-  >
-    Show different content to humans and agents reading your docs.
-  </Card>
-  <Card
-    title="Contextual menu"
-    icon="bolt"
-    href="/agent-ready/contextual"
-  >
-    Give readers one-click access to Claude, ChatGPT, Cursor, and more.
-  </Card>
-  <Card
-    title="AI coding tools"
-    icon="wand-magic-sparkles"
-    href="/ai-tools/claude-code"
-  >
-    Set up Claude Code, Cursor, or Windsurf with Mintlify's skill.
-  </Card>
-</Columns>
-
-## Need inspiration?
-
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<Steps>
+  <Step title="Deploy ClusterFuzz">
+    Set up a Google Cloud project and deploy ClusterFuzz using the `butler.py create_config` and `butler.py deploy` commands.
+  </Step>
+  <Step title="Build your fuzz targets">
+    Compile your code with sanitizer instrumentation (ASan, MSan, UBSan) and upload the build archive to Google Cloud Storage.
+  </Step>
+  <Step title="Configure a fuzzing job">
+    Create a job definition pointing to your build bucket. ClusterFuzz automatically picks up new builds as they are published.
+  </Step>
+  <Step title="Monitor and triage">
+    ClusterFuzz runs continuously across your bot fleet, deduplicates crashes, files bugs, and finds regression ranges automatically.
+  </Step>
+</Steps>

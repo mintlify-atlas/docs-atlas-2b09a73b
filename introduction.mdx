@@ -1,0 +1,60 @@
+---
+title: "ClusterFuzz: Google's Open-Source Fuzzing Infrastructure"
+description: "An overview of ClusterFuzz — Google's open-source scalable fuzzing infrastructure — covering key features, supported engines, and integrations."
+---
+
+ClusterFuzz is a scalable fuzzing infrastructure built by Google to find security and stability issues in software automatically. Google uses it to fuzz all Google products and as the fuzzing backend for [OSS-Fuzz](https://github.com/google/oss-fuzz), where it has helped identify over 27,000 bugs in Google products and more than 36,000 bugs across hundreds of open source projects. ClusterFuzz handles the entire fuzzing lifecycle — from running fuzz targets across large bot fleets to deduplicating crashes, filing bugs, and verifying fixes — without manual intervention.
+
+## Key features
+
+ClusterFuzz is designed to integrate fuzzing seamlessly into a software project's development process. Its core capabilities include:
+
+- **Highly scalable**: runs on clusters of any size. OSS-Fuzz operates ClusterFuzz across up to 100,000 VMs.
+- **Accurate crash deduplication**: automatically groups duplicate crashes so teams see each unique bug once.
+- **Automatic bug filing and triage**: integrates with issue trackers such as [Monorail](https://opensource.google.com/projects/monorail) and [Jira](https://www.atlassian.com/software/jira) to file, update, and close bugs automatically.
+- **Multiple fuzzing engines**: supports [libFuzzer](http://llvm.org/docs/LibFuzzer.html), [AFL++](https://github.com/AFLplusplus/AFLplusplus), and [Honggfuzz](https://github.com/google/honggfuzz) with ensemble fuzzing and per-engine strategies for optimal coverage.
+- **Blackbox fuzzing**: supports large, non-deterministic targets that cannot be instrumented directly.
+- **Testcase minimization**: automatically reduces crashing inputs to their smallest reproducible form.
+- **Regression bisection**: locates the exact commit that introduced a bug.
+- **Code coverage and statistics**: tracks fuzzer performance and crash rates over time.
+- **Web UI**: provides a management interface for viewing crashes, jobs, fuzzers, and corpora.
+- **Authentication**: integrates with various identity providers via [Firebase](https://firebase.google.com/docs/auth).
+
+## How ClusterFuzz fits into your workflow
+
+<Steps>
+  <Step title="Deploy your bot fleet">
+    ClusterFuzz bots continuously pull fuzzing tasks from a central server. You can run a single local bot for development or scale to thousands of VMs in production.
+  </Step>
+  <Step title="Upload instrumented builds">
+    Compile your code with sanitizer instrumentation (ASan, MSan, UBSan) and upload a build archive to Google Cloud Storage. ClusterFuzz picks up new builds automatically.
+  </Step>
+  <Step title="Run fuzz targets">
+    Bots execute your fuzz targets using the configured engines, managing corpora and applying mutation strategies to maximize coverage.
+  </Step>
+  <Step title="Triage and fix">
+    When a crash is found, ClusterFuzz deduplicates it, files a bug in your issue tracker, identifies the regression range via bisection, and verifies the fix once the bug is closed.
+  </Step>
+</Steps>
+
+## Integrations and related projects
+
+<CardGroup cols={2}>
+  <Card title="OSS-Fuzz" icon="shield-halved" href="https://github.com/google/oss-fuzz">
+    ClusterFuzz powers OSS-Fuzz, Google's continuous fuzzing service for critical open source projects. Over 850 projects are integrated and benefit from ClusterFuzz's automation at scale.
+  </Card>
+  <Card title="ClusterFuzzLite" icon="bolt" href="https://github.com/google/clusterfuzzlite">
+    A lightweight version of ClusterFuzz designed to run on CI/CD systems. ClusterFuzzLite brings coverage-guided fuzzing into pull request workflows without a full ClusterFuzz deployment.
+  </Card>
+</CardGroup>
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="Prerequisites" icon="list-check" href="/getting-started/prerequisites">
+    Install the required tools and dependencies before running ClusterFuzz locally.
+  </Card>
+  <Card title="Running a local instance" icon="laptop" href="/getting-started/local-instance">
+    Start a local ClusterFuzz server and bot to test core functionality on your machine.
+  </Card>
+</CardGroup>

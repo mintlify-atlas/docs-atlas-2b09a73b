@@ -1,0 +1,160 @@
+---
+title: "Coverage-Guided Fuzzing with libFuzzer and AFL++ Setup"
+description: "Build libFuzzer and AFL++ fuzz targets, create ClusterFuzz job types with correct naming conventions, and configure corpus pruning and dictionaries."
+---
+
+Coverage-guided fuzzing instruments your target at compile time so that the fuzzing engine can observe which code branches each input exercises. ClusterFuzz supports three coverage-guided engines: libFuzzer (recommended), AFL++, and Honggfuzz. This page walks you through building fuzz targets for libFuzzer and AFL++, creating the corresponding job types in ClusterFuzz, and configuring optional features such as seed corpus and dictionaries.
+
+## Prerequisites
+
+### Compiler
+
+libFuzzer and AFL++ require instrumentation from the Clang compiler. The minimum supported version is Clang **6.0**, but for serious use of ClusterFuzz you should use as close to trunk Clang as possible. You can get a recent build from the [LLVM snapshot builds page](https://llvm.org/builds/) (Windows) or the [LLVM apt page](https://apt.llvm.org/) (Ubuntu/Debian). Alternatively, download a release from the [LLVM releases page](http://releases.llvm.org/download.html) or install one through your package manager.
+
+Set the compiler environment variables so you can copy the example commands directly:
+
+```bash
+export CC=/path/to/clang
+export CXX=/path/to/clang++
+```
+
+### Platform
+
+libFuzzer is supported on Linux, macOS, and Windows. On Windows, use Clang **9.0** or later from the [LLVM Snapshot Builds page](https://llvm.org/builds/) and adapt commands for `cmd.exe`.
+
+AFL++ is supported on **Linux only**.
+
+## Building your fuzz target
+
+<Tabs>
+  <Tab title="libFuzzer">
+    libFuzzer targets are straightforward to build. Compile and link your fuzz target with `-fsanitize=address,fuzzer`. The `-fsanitize=fuzzer` flag links in the libFuzzer runtime and sets the entry point; `-fsanitize=address` enables AddressSanitizer to detect memory errors at runtime.
+
+    ```bash
+    $CXX -fsanitize=address,fuzzer fuzzer.cc -o fuzzer
+    # Test the build locally before uploading.
+    ./fuzzer -runs=10
+    # Package the fuzzer for upload to ClusterFuzz.
+    zip fuzzer-build.zip fuzzer
+    ```
+
+    The zip file must contain the fuzz target binary and any shared libraries or data files it depends on. ClusterFuzz unpacks this zip on the bot before running the fuzzer.
+
+    <Tip>
+      Run your fuzzer locally with `-runs=10` before uploading to confirm it compiles, links, and executes without errors.
+    </Tip>
+  </Tab>
+  <Tab title="AFL++">
+    ClusterFuzz supports fuzzing libFuzzer harness functions (`LLVMFuzzerTestOneInput`) with AFL++. AFL++ must be used with AddressSanitizer.
+
+    First, use the provided script to download and build AFL++ and `FuzzingEngine.a`, a static library that makes a libFuzzer-style fuzz target compatible with AFL++:
+
+    ```bash
+    # Build afl-fuzz and FuzzingEngine.a
+    ./build_afl.bash
+    # Compile the target with ASan and coverage instrumentation, link against FuzzingEngine.a
+    $CXX -fsanitize=address -fsanitize-coverage=trace-pc-guard fuzzer.cc FuzzingEngine.a -o fuzzer
+    # Test locally — INPUT_CORPUS is a directory of seed inputs. Press Ctrl-C when done.
+    AFL_SKIP_CPUFREQ=1 ./afl-fuzz -i $INPUT_CORPUS -o output -m none ./fuzzer
+    # Package for upload to ClusterFuzz.
+    zip fuzzer-build.zip fuzzer afl-fuzz afl-showmap
+    ```
+
+    The zip file must include the fuzz target binary, `afl-fuzz`, and `afl-showmap`. Both `afl-fuzz` and `afl-showmap` are built by `build_afl.bash`.
+
+    <Note>
+      This setup does not use AFL++ to its full potential because advanced instrumentation features like CMPLOG and COMPCOV are not enabled. For maximum effectiveness, consider using [OSS-Fuzz](https://github.com/google/oss-fuzz) to create multiple fuzzing packages, each instrumented with different options.
+    </Note>
+  </Tab>
+</Tabs>
+
+## Creating a job type
+
+A job type tells ClusterFuzz how to run your fuzz target. Job names for coverage-guided fuzzing follow a strict naming convention, and templates pre-populate the required environment variables for each engine.
+
+### Naming conventions
+
+- libFuzzer jobs **must** contain the string **`libfuzzer`** in their name.
+- AFL++ jobs **must** contain the string **`afl`** in their name.
+- All jobs **must** include the sanitizer name: **`asan`**, **`msan`**, or **`ubsan`**.
+
+Valid examples: `libfuzzer_asan_my_project`, `afl_asan_my_project`.
+
+### Job creation steps
+
+<Steps>
+  <Step title="Navigate to the Jobs page">
+    Open the ClusterFuzz web UI and go to the **Jobs** page.
+  </Step>
+  <Step title="Open the ADD NEW JOB form">
+    Scroll down to the **ADD NEW JOB** form.
+  </Step>
+  <Step title="Fill out the name and platform">
+    Enter a name following the naming conventions above and set **Platform** to **LINUX**.
+  </Step>
+  <Step title="Select the fuzzing engine">
+    In the **Select/modify fuzzers** field, choose **libFuzzer**, **afl**, or **honggfuzz** depending on your target.
+  </Step>
+  <Step title="Apply the appropriate templates">
+    Templates pre-fill environment variables for the chosen engine:
+
+    - **libFuzzer:** select the **`libfuzzer`** template and the **`engine_asan`**, **`engine_msan`**, or **`engine_ubsan`** template matching your sanitizer.
+    - **AFL++:** select the **`afl`** template and **`engine_asan`**.
+    - **Honggfuzz:** select the **`honggfuzz`** template and **`engine_asan`**.
+  </Step>
+  <Step title="Upload your build">
+    Under **Custom Build**, select the zip archive you created in the build step. If you are running ClusterFuzz in production, set up a [build pipeline](/production-setup/build-pipeline) and configure continuous builds instead of uploading a custom build manually.
+  </Step>
+  <Step title="Add the job">
+    Click **ADD** to save the job. ClusterFuzz will schedule fuzzing tasks on available bots.
+  </Step>
+</Steps>
+
+### Enabling corpus pruning
+
+Corpus pruning removes redundant inputs from the corpus to prevent unbounded growth. You must enable it manually by adding a variable to the job's **Environment String**:
+
+```
+CORPUS_PRUNE = True
+```
+
+<Warning>
+  Add `CORPUS_PRUNE = True` to your **libFuzzer ASan** job's Environment String. Corpus pruning is not supported for AFL++ jobs — another reason to run a libFuzzer job alongside any AFL++ job.
+</Warning>
+
+## Seed corpus
+
+You can supply seed inputs to give the fuzzing engine a head start. ClusterFuzz recognises a seed corpus zip file if it meets both conditions:
+
+- It is in the same directory as the fuzz target binary inside the build zip.
+- Its filename is `<fuzz_target>_seed_corpus.zip` (for example, `my_fuzzer_seed_corpus.zip` for a target named `my_fuzzer`).
+
+Create the seed corpus at build time by zipping a directory of representative input files:
+
+```bash
+zip my_fuzzer_seed_corpus.zip seed_inputs/*
+```
+
+Then include it in the build zip alongside the fuzz target binary.
+
+## Dictionaries
+
+A dictionary is a list of tokens — keywords, magic bytes, or delimiters — that the fuzzing engine can insert during mutation to help it cross parser boundaries more quickly. ClusterFuzz loads a dictionary for a fuzz target if:
+
+- It is in the same directory as the fuzz target inside the build zip.
+- Its filename is `<fuzz_target>.dict` (for example, `my_fuzzer.dict`).
+
+See the [libFuzzer dictionary format documentation](https://llvm.org/docs/LibFuzzer.html#dictionaries) for the file syntax.
+
+## AFL++ limitations
+
+ClusterFuzz does not support corpus pruning or crash minimization for AFL++ jobs. If you use AFL++, you should also create a libFuzzer job for the same target so that corpus pruning and minimization can run under libFuzzer.
+
+## Checking results
+
+Once bots pick up your job, you can monitor progress in the ClusterFuzz UI:
+
+- **Bot logs** — View real-time output from the fuzzing process. Look for `fuzz libFuzzer <job_name>` or `fuzz afl <job_name>` to confirm the job is running.
+- **Testcases page** — Any crashes found by ClusterFuzz appear here, deduplicated and minimized.
+- **Fuzzer stats** — Available on production instances after approximately one day of fuzzing. Shows executions per second, coverage, and other metrics.
+- **Crash stats** — Aggregate crash data available on production instances.
